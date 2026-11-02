@@ -1,82 +1,97 @@
+import groovy.json.JsonOutput
+
 plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
-	id 'maven-publish'
+    id 'base'
 }
 
-repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+group = 'com.tuftuvisuals'
+version = '1.0.0'
+
+def generatedResources = layout.buildDirectory.dir('generated/tuftuResources')
+
+tasks.register('generateModResources') {
+    outputs.dir(generatedResources)
+
+    doLast {
+        File root = generatedResources.get().asFile
+
+        delete(root)
+        root.mkdirs()
+
+        def metadata = [
+            schemaVersion: 1,
+            id: 'tuftu_visuals',
+            version: project.version.toString(),
+            name: 'Tuftu Visuals',
+            description: 'PvP visuals for Fabric',
+            environment: 'client',
+            depends: [
+                fabricloader: '>=0.18.0',
+                minecraft: '1.21.11'
+            ]
+        ]
+
+        new File(root, 'fabric.mod.json').setText(
+            JsonOutput.prettyPrint(JsonOutput.toJson(metadata)),
+            'UTF-8'
+        )
+
+        File models = new File(root, 'assets/minecraft/models/item')
+        models.mkdirs()
+
+        def swords = [
+            'wooden_sword',
+            'stone_sword',
+            'iron_sword',
+            'golden_sword',
+            'diamond_sword',
+            'netherite_sword'
+        ]
+
+        swords.each { sword ->
+            def model = [
+                parent: 'minecraft:item/handheld',
+                textures: [
+                    layer0: "minecraft:item/${sword}".toString()
+                ],
+                display: [
+                    firstperson_righthand: [
+                        rotation: [0, -90, 25],
+                        translation: [1.13, 3.2, 1.13],
+                        scale: [0.52, 0.52, 0.52]
+                    ],
+                    firstperson_lefthand: [
+                        rotation: [0, 90, -25],
+                        translation: [1.13, 3.2, 1.13],
+                        scale: [0.52, 0.52, 0.52]
+                    ],
+                    thirdperson_righthand: [
+                        rotation: [0, -90, 55],
+                        translation: [0, 4, 0.5],
+                        scale: [0.6, 0.6, 0.6]
+                    ],
+                    thirdperson_lefthand: [
+                        rotation: [0, 90, -55],
+                        translation: [0, 4, 0.5],
+                        scale: [0.6, 0.6, 0.6]
+                    ]
+                ]
+            ]
+
+            new File(models, "${sword}.json").setText(
+                JsonOutput.prettyPrint(JsonOutput.toJson(model)),
+                'UTF-8'
+            )
+        }
+    }
 }
 
-loom {
-	splitEnvironmentSourceSets()
-
-	mods {
-		"modid" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
-	}
+tasks.register('jar', Jar) {
+    dependsOn tasks.named('generateModResources')
+    archiveBaseName = 'TuftuVisuals'
+    from(generatedResources)
 }
 
-dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings loom.officialMojangMappings()
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-}
-
-processResources {
-	def version = project.version
-	inputs.property "version", version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
-}
-
-java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
-}
-
-jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
-
-	from("LICENSE") {
-		rename { "${it}_$projectName"}
-	}
-}
-
-// configure the maven publication
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
+tasks.named('assemble') {
+    dependsOn tasks.named('jar')
 }
